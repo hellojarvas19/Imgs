@@ -393,6 +393,9 @@ for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
     $result_data = json_decode($graphql_response['body'], true);
     $completion = $result_data['data']['submitForCompletion'] ?? [];
 
+    // Extract receipt ID first (might be at different locations)
+    $receipt_id = $completion['receipt']['id'] ?? null;
+    
     // Check errors
     if (isset($completion['errors'])) {
         $error_codes = array_column($completion['errors'], 'code');
@@ -403,22 +406,22 @@ for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
             json_response($price, 'CARD_DECLINED');
         }
         
-        // Check for soft errors - retry once
+        // Check for soft errors - if we have receipt, ignore and proceed to polling
         $soft_errors = ['TAX_NEW_TAX_MUST_BE_ACCEPTED', 'WAITING_PENDING_TERMS'];
         $has_soft_errors = !empty(array_intersect($error_codes, $soft_errors));
         
+        // If soft errors and we have receipt, proceed to polling
+        if ($has_soft_errors && $receipt_id) {
+            break;
+        }
+        
+        // If soft errors but no receipt, retry once
         if ($has_soft_errors && $submit_attempt == 0) {
             sleep(2);
             continue;
         }
         
-        // If we have a receipt ID, proceed to polling even with soft errors
-        $receipt_id = $completion['receipt']['id'] ?? null;
-        if ($receipt_id) {
-            break;
-        }
-        
-        // No receipt and not soft errors - return error
+        // Hard errors without receipt
         if (!empty($error_codes)) {
             json_response($price, implode(',', $error_codes));
         }
@@ -427,8 +430,6 @@ for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
     if (isset($completion['reason'])) {
         json_response($price, $completion['reason']);
     }
-
-    $receipt_id = $completion['receipt']['id'] ?? null;
     
     if ($receipt_id) {
         break;
