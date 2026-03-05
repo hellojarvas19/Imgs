@@ -1,0 +1,9 @@
+{
+  "name": "shopify-checker-api",
+  "version": "1.0.0",
+  "description": "Shopify card checker API",
+  "main": "api.php",
+  "scripts": {
+    "start": "php -S 0.0.0.0:$PORT"
+  }
+}
