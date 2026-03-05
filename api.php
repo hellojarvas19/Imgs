@@ -217,7 +217,7 @@ $add_data = ['id' => $variant_id, 'quantity' => '1', 'form_type' => 'product'];
 $cart_add_response = curl_request($site . '/cart/add.js', $product_header, $add_data, false, $proxy_url);
 
 if ($cart_add_response['code'] != 200) {
-    json_response($price, 'CART_ADD_FAILED');
+    json_response($price, 'CARD_DECLINED');
 }
 
 $cart_response = curl_request($site . '/cart.js', $product_header, null, false, $proxy_url);
@@ -400,7 +400,7 @@ for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
     if (isset($completion['errors'])) {
         $error_codes = array_column($completion['errors'], 'code');
         
-        $decline_errors = ['PAYMENTS_CREDIT_CARD_GENERIC', 'PAYMENTS_CREDIT_CARD_NUMBER_INVALID_FORMAT', 'DELIVERY_INVALID_POSTAL_CODE_FOR_ZONE', 'PAYMENTS_INVALID_POSTAL_CODE_FOR_ZONE', 'MERCHANDISE_OUT_OF_STOCK'];
+        $decline_errors = ['PAYMENTS_CREDIT_CARD_GENERIC', 'PAYMENTS_CREDIT_CARD_NUMBER_INVALID_FORMAT', 'DELIVERY_INVALID_POSTAL_CODE_FOR_ZONE', 'PAYMENTS_INVALID_POSTAL_CODE_FOR_ZONE', 'MERCHANDISE_OUT_OF_STOCK', 'DELIVERY_DELIVERY_LINE_DETAIL_CHANGED'];
         
         if (!empty(array_intersect($error_codes, $decline_errors))) {
             json_response($price, 'CARD_DECLINED');
