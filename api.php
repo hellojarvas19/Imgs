@@ -376,35 +376,57 @@ $graphql_payload = [
     'operationName' => 'SubmitForCompletion'
 ];
 
-$graphql_response = curl_request($graphql_url, $graphql_headers, $graphql_payload, true, $proxy_url);
+$receipt_id = null;
 
-if ($graphql_response['code'] != 200) {
-    json_response($price, 'GRAPHQL_REQUEST_FAILED');
-}
+// Try up to 2 times for soft errors
+for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
+    $graphql_response = curl_request($graphql_url, $graphql_headers, $graphql_payload, true, $proxy_url);
 
-$result_data = json_decode($graphql_response['body'], true);
-$completion = $result_data['data']['submitForCompletion'] ?? [];
-
-// Check errors
-if (isset($completion['errors'])) {
-    $error_codes = array_column($completion['errors'], 'code');
-    
-    $decline_errors = ['PAYMENTS_CREDIT_CARD_GENERIC', 'PAYMENTS_CREDIT_CARD_NUMBER_INVALID_FORMAT', 'DELIVERY_INVALID_POSTAL_CODE_FOR_ZONE', 'PAYMENTS_INVALID_POSTAL_CODE_FOR_ZONE', 'MERCHANDISE_OUT_OF_STOCK'];
-    
-    if (!empty(array_intersect($error_codes, $decline_errors))) {
-        json_response($price, 'CARD_DECLINED');
+    if ($graphql_response['code'] != 200) {
+        if ($submit_attempt == 0) {
+            sleep(2);
+            continue;
+        }
+        json_response($price, 'GRAPHQL_REQUEST_FAILED');
     }
+
+    $result_data = json_decode($graphql_response['body'], true);
+    $completion = $result_data['data']['submitForCompletion'] ?? [];
+
+    // Check errors
+    if (isset($completion['errors'])) {
+        $error_codes = array_column($completion['errors'], 'code');
+        
+        $decline_errors = ['PAYMENTS_CREDIT_CARD_GENERIC', 'PAYMENTS_CREDIT_CARD_NUMBER_INVALID_FORMAT', 'DELIVERY_INVALID_POSTAL_CODE_FOR_ZONE', 'PAYMENTS_INVALID_POSTAL_CODE_FOR_ZONE', 'MERCHANDISE_OUT_OF_STOCK'];
+        
+        if (!empty(array_intersect($error_codes, $decline_errors))) {
+            json_response($price, 'CARD_DECLINED');
+        }
+        
+        // Check for soft errors
+        $soft_errors = ['TAX_NEW_TAX_MUST_BE_ACCEPTED', 'WAITING_PENDING_TERMS'];
+        $only_soft_errors = empty(array_diff($error_codes, $soft_errors));
+        
+        if ($only_soft_errors && $submit_attempt == 0) {
+            sleep(2);
+            continue;
+        }
+        
+        if (!empty($error_codes)) {
+            json_response($price, implode(',', $error_codes));
+        }
+    }
+
+    if (isset($completion['reason'])) {
+        json_response($price, $completion['reason']);
+    }
+
+    $receipt_id = $completion['receipt']['id'] ?? null;
     
-    if (!empty($error_codes)) {
-        json_response($price, implode(',', $error_codes));
+    if ($receipt_id) {
+        break;
     }
 }
-
-if (isset($completion['reason'])) {
-    json_response($price, $completion['reason']);
-}
-
-$receipt_id = $completion['receipt']['id'] ?? null;
 
 if (!$receipt_id) {
     json_response($price, 'NO_RECEIPT_ID');
