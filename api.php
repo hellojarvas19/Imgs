@@ -403,15 +403,22 @@ for ($submit_attempt = 0; $submit_attempt < 2; $submit_attempt++) {
             json_response($price, 'CARD_DECLINED');
         }
         
-        // Check for soft errors
+        // Check for soft errors - retry once
         $soft_errors = ['TAX_NEW_TAX_MUST_BE_ACCEPTED', 'WAITING_PENDING_TERMS'];
-        $only_soft_errors = empty(array_diff($error_codes, $soft_errors));
+        $has_soft_errors = !empty(array_intersect($error_codes, $soft_errors));
         
-        if ($only_soft_errors && $submit_attempt == 0) {
+        if ($has_soft_errors && $submit_attempt == 0) {
             sleep(2);
             continue;
         }
         
+        // If we have a receipt ID, proceed to polling even with soft errors
+        $receipt_id = $completion['receipt']['id'] ?? null;
+        if ($receipt_id) {
+            break;
+        }
+        
+        // No receipt and not soft errors - return error
         if (!empty($error_codes)) {
             json_response($price, implode(',', $error_codes));
         }
